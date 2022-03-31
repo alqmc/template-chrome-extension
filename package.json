@@ -8,7 +8,8 @@
     "build": "gulp --require sucrase/register/ts -f build/gulpfile.ts",
     "clear": "rimraf dist",
     "update:version": "sucrase-node build/utils/version.ts",
-    "log": "conventional-changelog -p custom-config  -i CHANGELOG.md -s -n ./changelog-option.js"
+    "log": "conventional-changelog -p custom-config  -i CHANGELOG.md -s -n ./changelog-option.js",
+    "push": "git push origin master && git push github master"
   },
   "keywords": [
     "chrome",
