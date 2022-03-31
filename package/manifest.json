@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "TemplateChromeextension",
+  "version": "0.0.1",
+  "description": "template-chrome-extension",
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_security_policy": {},
+  "action": {
+    "default_icon": "assets/logo.png",
+    "default_title": "template-chrome-extension",
+    "default_popup": "html/popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "css": [
+        "style/common.css"
+      ],
+      "run_at": "document_start"
+    }
+  ],
+  "icons": {
+    "16": "assets/logo.png",
+    "48": "assets/logo.png",
+    "128": "assets/logo.png"
+  },
+  "permissions": [
+    "contextMenus",
+    "storage",
+    "notifications"
+  ],
+  "optional_permissions": [],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ]
+}

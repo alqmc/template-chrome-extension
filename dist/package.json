@@ -1,0 +1,63 @@
+{
+  "name": "template-chrome-extension",
+  "version": "0.0.1",
+  "description": "template-chrome-extension",
+  "scripts": {
+    "dev": "vite",
+    "build:vite": "vite build",
+    "build": "gulp --require sucrase/register/ts -f build/gulpfile.ts",
+    "clear": "rimraf dist",
+    "update:version": "sucrase-node build/utils/version.ts",
+    "log": "conventional-changelog -p custom-config  -i CHANGELOG.md -s -n ./changelog-option.js"
+  },
+  "keywords": [
+    "chrome",
+    "chrome-extension"
+  ],
+  "author": "Thezero",
+  "license": "ISC",
+  "devDependencies": {
+    "@commitlint/cli": "^8.3.5",
+    "@commitlint/config-angular": "^8.3.4",
+    "@rollup/plugin-commonjs": "^21.0.3",
+    "@rollup/plugin-node-resolve": "^13.1.3",
+    "@rollup/plugin-typescript": "3.1.1",
+    "@types/archiver": "^5.3.1",
+    "@types/gulp": "^4.0.9",
+    "@vitejs/plugin-vue": "^2.3.1",
+    "@vitejs/plugin-vue-jsx": "^1.3.8",
+    "archiver": "^5.3.0",
+    "chalk": "4.1.2",
+    "chrome-types": "^0.1.96",
+    "commitizen": "^4.1.2",
+    "compare-func": "^2.0.0",
+    "conventional-changelog-cli": "^2.0.34",
+    "conventional-changelog-custom-config": "^0.3.1",
+    "cz-conventional-changelog": "^3.2.0",
+    "esbuild": "^0.14.29",
+    "fast-glob": "^3.2.11",
+    "gulp": "^4.0.2",
+    "husky": "^4.2.5",
+    "less": "^4.1.2",
+    "lint-staged": "^10.3.0",
+    "rimraf": "^3.0.2",
+    "rollup": "^2.70.1",
+    "rollup-plugin-esbuild": "^4.8.2",
+    "rollup-plugin-replace": "^2.2.0",
+    "rollup-plugin-typescript2": "^0.31.2",
+    "rollup-plugin-vue": "^6.0.0",
+    "sucrase": "^3.20.3",
+    "tslib": "2.0.0",
+    "typescript": "^4.6.3",
+    "vite": "^2.8.6"
+  },
+  "dependencies": {
+    "vue": "^3.2.31",
+    "vue-router": "^4.0.14"
+  },
+  "config": {
+    "commitizen": {
+      "path": "./node_modules/cz-conventional-changelog"
+    }
+  }
+}
