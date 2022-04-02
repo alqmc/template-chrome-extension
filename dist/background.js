@@ -1,1 +1,8 @@
-(function(e){typeof define=="function"&&define.amd?define(e):e()})(function(){"use strict";console.log("template-chrome-extension")});
+(function (factory) {
+	typeof define === 'function' && define.amd ? define(factory) :
+	factory();
+})((function () { 'use strict';
+
+	console.log("template-chrome-extension");
+
+}));

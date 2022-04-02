@@ -7,9 +7,11 @@ import esbuild from 'rollup-plugin-esbuild';
 import path from 'path';
 import { enterPath } from './utils/path';
 import replace from '@rollup/plugin-replace';
-
+import css from 'rollup-plugin-css-only';
+import { html } from './plugin/rollup-plugin-html';
 const buildVueBunless = () => {
   const plugins = [
+    css({ output: 'bundle.css' }),
     vue({
       isProduction: true
     }),
@@ -19,7 +21,7 @@ const buildVueBunless = () => {
     commonjs(),
     esbuild({
       tsconfig: path.resolve(__dirname, '../tsconfig.json'),
-      minify: true,
+      minify: false,
       loaders: {
         '.vue': 'ts'
       }
@@ -28,6 +30,9 @@ const buildVueBunless = () => {
       preventAssignment: true,
       'process.env.NODE_ENV': JSON.stringify('production'),
       'process.env.BASE_URL': JSON.stringify('/')
+    }),
+    html({
+      template: path.resolve(enterPath, 'source/html/popup.html')
     })
   ] as Plugin[];
   return plugins;
@@ -38,7 +43,7 @@ const buildTsBunless = () => {
     commonjs(),
     esbuild({
       sourceMap: false,
-      minify: true,
+      minify: false,
       tsconfig: path.resolve(__dirname, '../tsconfig.json')
     })
   ];
