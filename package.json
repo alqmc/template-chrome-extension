@@ -9,7 +9,7 @@
     "clear": "rimraf dist",
     "update:version": "sucrase-node build/utils/version.ts",
     "log": "conventional-changelog -p custom-config  -i CHANGELOG.md -s -n ./changelog-option.js",
-    "push": "git push origin master&&git push github master"
+    "push": "git push origin master && git push githup master"
   },
   "keywords": [
     "chrome",
@@ -25,6 +25,7 @@
     "@rollup/plugin-replace": "^4.0.0",
     "@types/archiver": "^5.3.1",
     "@types/gulp": "^4.0.9",
+    "@types/gulp-autoprefixer": "^0.0.33",
     "@types/rollup-plugin-css-only": "^3.1.0",
     "@typescript-eslint/eslint-plugin": "^5.17.0",
     "@typescript-eslint/parser": "^5.17.0",
@@ -47,6 +48,9 @@
     "eslint-plugin-vue": "^8.5.0",
     "fast-glob": "^3.2.11",
     "gulp": "^4.0.2",
+    "gulp-autoprefixer": "^8.0.0",
+    "gulp-clean-css": "^4.3.0",
+    "gulp-less": "^5.0.0",
     "husky": "^4.2.5",
     "less": "^4.1.2",
     "lint-staged": "^10.3.0",

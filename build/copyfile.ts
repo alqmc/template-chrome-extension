@@ -29,7 +29,7 @@ export const copyFiles = () =>
       resolve(rootpath, 'README.md'),
       resolve(buildOutpath, 'README.md')
     ),
-    moveDir(resolve(enterPath, 'assets'), resolve(buildOutpath, 'assets')),
-    moveDir(resolve(enterPath, 'source/style'), resolve(buildOutpath, 'style'))
+    moveDir(resolve(enterPath, 'assets'), resolve(buildOutpath, 'assets'))
+    // moveDir(resolve(enterPath, 'source/style'), resolve(buildOutpath, 'style'))
     // moveDir(resolve(enterPath, 'source/html'), resolve(buildOutpath, 'html'))
   ]);

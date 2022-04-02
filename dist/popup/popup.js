@@ -8885,7 +8885,7 @@
     }
 
     const _sfc_main = defineComponent({
-      name: "Popupview"
+      name: "PopupView"
     });
     const _hoisted_1 = { class: "popup" };
     function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {

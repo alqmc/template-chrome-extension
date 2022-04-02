@@ -32,7 +32,8 @@ const buildVueBunless = () => {
       'process.env.BASE_URL': JSON.stringify('/')
     }),
     html({
-      template: path.resolve(enterPath, 'source/html/popup.html')
+      template: path.resolve(enterPath, 'source/html/popup.html'),
+      style: ['../style/popup.css']
     })
   ] as Plugin[];
   return plugins;
