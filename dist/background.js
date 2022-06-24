@@ -1,8 +1,3 @@
-(function (factory) {
-	typeof define === 'function' && define.amd ? define(factory) :
-	factory();
-})((function () { 'use strict';
+'use strict';
 
-	console.log("template-chrome-extension");
-
-}));
+console.log("template-chrome-extension");

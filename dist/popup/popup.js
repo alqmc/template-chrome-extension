@@ -1,7 +1,5 @@
-(function (factory) {
-    typeof define === 'function' && define.amd ? define(factory) :
-    factory();
-})((function () { 'use strict';
+(function () {
+    'use strict';
 
     /**
      * Make a map and return a function for checking if a key
@@ -207,8 +205,17 @@
     let activeEffectScope;
     class EffectScope {
         constructor(detached = false) {
+            /**
+             * @internal
+             */
             this.active = true;
+            /**
+             * @internal
+             */
             this.effects = [];
+            /**
+             * @internal
+             */
             this.cleanups = [];
             if (!detached && activeEffectScope) {
                 this.parent = activeEffectScope;
@@ -218,18 +225,27 @@
         }
         run(fn) {
             if (this.active) {
+                const currentEffectScope = activeEffectScope;
                 try {
                     activeEffectScope = this;
                     return fn();
                 }
                 finally {
-                    activeEffectScope = this.parent;
+                    activeEffectScope = currentEffectScope;
                 }
             }
         }
+        /**
+         * This should only be called on non-detached scopes
+         * @internal
+         */
         on() {
             activeEffectScope = this;
         }
+        /**
+         * This should only be called on non-detached scopes
+         * @internal
+         */
         off() {
             activeEffectScope = this.parent;
         }
@@ -356,10 +372,17 @@
                 activeEffect = this.parent;
                 shouldTrack = lastShouldTrack;
                 this.parent = undefined;
+                if (this.deferStop) {
+                    this.stop();
+                }
             }
         }
         stop() {
-            if (this.active) {
+            // stopped while running itself - defer the cleanup
+            if (activeEffect === this) {
+                this.deferStop = true;
+            }
+            else if (this.active) {
                 cleanupEffect(this);
                 if (this.onStop) {
                     this.onStop();
@@ -491,20 +514,37 @@
     }
     function triggerEffects(dep, debuggerEventExtraInfo) {
         // spread into array for stabilization
-        for (const effect of isArray(dep) ? dep : [...dep]) {
-            if (effect !== activeEffect || effect.allowRecurse) {
-                if (effect.scheduler) {
-                    effect.scheduler();
-                }
-                else {
-                    effect.run();
-                }
+        const effects = isArray(dep) ? dep : [...dep];
+        for (const effect of effects) {
+            if (effect.computed) {
+                triggerEffect(effect);
+            }
+        }
+        for (const effect of effects) {
+            if (!effect.computed) {
+                triggerEffect(effect);
+            }
+        }
+    }
+    function triggerEffect(effect, debuggerEventExtraInfo) {
+        if (effect !== activeEffect || effect.allowRecurse) {
+            if (effect.scheduler) {
+                effect.scheduler();
+            }
+            else {
+                effect.run();
             }
         }
     }
 
     const isNonTrackableKeys = /*#__PURE__*/ makeMap(`__proto__,__v_isRef,__isVue`);
-    const builtInSymbols = new Set(Object.getOwnPropertyNames(Symbol)
+    const builtInSymbols = new Set(
+    /*#__PURE__*/
+    Object.getOwnPropertyNames(Symbol)
+        // ios10.x Object.getOwnPropertyNames(Symbol) can enumerate 'arguments' and 'caller'
+        // but accessing them on Symbol leads to TypeError because Symbol is a strict mode
+        // function
+        .filter(key => key !== 'arguments' && key !== 'caller')
         .map(key => Symbol[key])
         .filter(isSymbol));
     const get = /*#__PURE__*/ createGetter();
@@ -577,9 +617,8 @@
                 return res;
             }
             if (isRef(res)) {
-                // ref unwrapping - does not apply for Array + integer key.
-                const shouldUnwrap = !targetIsArray || !isIntegerKey(key);
-                return shouldUnwrap ? res.value : res;
+                // ref unwrapping - skip unwrap for Array + integer key.
+                return targetIsArray && isIntegerKey(key) ? res : res.value;
             }
             if (isObject(res)) {
                 // Convert returned value into a proxy as well. we do the isObject check
@@ -673,10 +712,12 @@
         target = target["__v_raw" /* RAW */];
         const rawTarget = toRaw(target);
         const rawKey = toRaw(key);
-        if (key !== rawKey) {
-            !isReadonly && track(rawTarget, "get" /* GET */, key);
+        if (!isReadonly) {
+            if (key !== rawKey) {
+                track(rawTarget, "get" /* GET */, key);
+            }
+            track(rawTarget, "get" /* GET */, rawKey);
         }
-        !isReadonly && track(rawTarget, "get" /* GET */, rawKey);
         const { has } = getProto(rawTarget);
         const wrap = isShallow ? toShallow : isReadonly ? toReadonly : toReactive;
         if (has.call(rawTarget, key)) {
@@ -695,10 +736,12 @@
         const target = this["__v_raw" /* RAW */];
         const rawTarget = toRaw(target);
         const rawKey = toRaw(key);
-        if (key !== rawKey) {
-            !isReadonly && track(rawTarget, "has" /* HAS */, key);
+        if (!isReadonly) {
+            if (key !== rawKey) {
+                track(rawTarget, "has" /* HAS */, key);
+            }
+            track(rawTarget, "has" /* HAS */, rawKey);
         }
-        !isReadonly && track(rawTarget, "has" /* HAS */, rawKey);
         return key === rawKey
             ? target.has(key)
             : target.has(key) || target.has(rawKey);
@@ -984,7 +1027,7 @@
         if (existingProxy) {
             return existingProxy;
         }
-        // only a whitelist of value types can be observed.
+        // only specific value types can be observed.
         const targetType = getTargetType(target);
         if (targetType === 0 /* INVALID */) {
             return target;
@@ -1138,7 +1181,6 @@
         const cRef = new ComputedRefImpl(getter, setter, onlyGetter || !setter, isSSR);
         return cRef;
     }
-    Promise.resolve();
 
     function callWithErrorHandling(fn, instance, type, args) {
         let res;
@@ -1211,7 +1253,7 @@
     const pendingPostFlushCbs = [];
     let activePostFlushCbs = null;
     let postFlushIndex = 0;
-    const resolvedPromise = Promise.resolve();
+    const resolvedPromise = /*#__PURE__*/ Promise.resolve();
     let currentFlushPromise = null;
     let currentPreFlushParentJob = null;
     function nextTick(fn) {
@@ -1301,6 +1343,8 @@
         }
     }
     function flushPostFlushCbs(seen) {
+        // flush any pre cbs queued during the flush (e.g. pre watchers)
+        flushPreFlushCbs();
         if (pendingPostFlushCbs.length) {
             const deduped = [...new Set(pendingPostFlushCbs)];
             pendingPostFlushCbs.length = 0;
@@ -1386,7 +1430,6 @@
         // handle late devtools injection - only do this if we are in an actual
         // browser environment to avoid the timer handle stalling test runner exit
         // (#4815)
-        // eslint-disable-next-line no-restricted-globals
         typeof window !== 'undefined' &&
             // some envs mock window but not fully
             window.HTMLElement &&
@@ -1439,6 +1482,8 @@
     }
 
     function emit$1(instance, event, ...rawArgs) {
+        if (instance.isUnmounted)
+            return;
         const props = instance.vnode.props || EMPTY_OBJ;
         let args = rawArgs;
         const isModelListener = event.startsWith('update:');
@@ -1450,7 +1495,7 @@
             if (trim) {
                 args = rawArgs.map(a => a.trim());
             }
-            else if (number) {
+            if (number) {
                 args = rawArgs.map(toNumber);
             }
         }
@@ -1663,6 +1708,8 @@
         }
         // inherit directives
         if (vnode.dirs) {
+            // clone before mutating since the root may be a hoisted vnode
+            root = cloneVNode(root);
             root.dirs = root.dirs ? root.dirs.concat(vnode.dirs) : vnode.dirs;
         }
         // inherit transition data
@@ -1849,7 +1896,7 @@
         }
         else if (isArray(source)) {
             isMultiSource = true;
-            forceTrigger = source.some(isReactive);
+            forceTrigger = source.some(s => isReactive(s) || isShallow(s));
             getter = () => source.map(s => {
                 if (isRef(s)) {
                     return s.value;
@@ -1955,16 +2002,7 @@
         }
         else {
             // default: 'pre'
-            scheduler = () => {
-                if (!instance || instance.isMounted) {
-                    queuePreFlushCb(job);
-                }
-                else {
-                    // with 'pre' option, the first call must happen before
-                    // the component is mounted so it is called synchronously.
-                    job();
-                }
-            };
+            scheduler = () => queuePreFlushCb(job);
         }
         const effect = new ReactiveEffect(getter, scheduler);
         // initial run
@@ -2159,6 +2197,227 @@
     function onErrorCaptured(hook, target = currentInstance) {
         injectHook("ec" /* ERROR_CAPTURED */, hook, target);
     }
+    function invokeDirectiveHook(vnode, prevVNode, instance, name) {
+        const bindings = vnode.dirs;
+        const oldBindings = prevVNode && prevVNode.dirs;
+        for (let i = 0; i < bindings.length; i++) {
+            const binding = bindings[i];
+            if (oldBindings) {
+                binding.oldValue = oldBindings[i].value;
+            }
+            let hook = binding.dir[name];
+            if (hook) {
+                // disable tracking inside all lifecycle hooks
+                // since they can potentially be called inside effects.
+                pauseTracking();
+                callWithAsyncErrorHandling(hook, instance, 8 /* DIRECTIVE_HOOK */, [
+                    vnode.el,
+                    binding,
+                    vnode,
+                    prevVNode
+                ]);
+                resetTracking();
+            }
+        }
+    }
+
+    const COMPONENTS = 'components';
+    /**
+     * @private
+     */
+    function resolveComponent(name, maybeSelfReference) {
+        return resolveAsset(COMPONENTS, name, true, maybeSelfReference) || name;
+    }
+    const NULL_DYNAMIC_COMPONENT = Symbol();
+    // implementation
+    function resolveAsset(type, name, warnMissing = true, maybeSelfReference = false) {
+        const instance = currentRenderingInstance || currentInstance;
+        if (instance) {
+            const Component = instance.type;
+            // explicit self name has highest priority
+            if (type === COMPONENTS) {
+                const selfName = getComponentName(Component, false /* do not include inferred name to avoid breaking existing code */);
+                if (selfName &&
+                    (selfName === name ||
+                        selfName === camelize(name) ||
+                        selfName === capitalize(camelize(name)))) {
+                    return Component;
+                }
+            }
+            const res = 
+            // local registration
+            // check instance[type] first which is resolved for options API
+            resolve(instance[type] || Component[type], name) ||
+                // global registration
+                resolve(instance.appContext[type], name);
+            if (!res && maybeSelfReference) {
+                // fallback to implicit self-reference
+                return Component;
+            }
+            return res;
+        }
+    }
+    function resolve(registry, name) {
+        return (registry &&
+            (registry[name] ||
+                registry[camelize(name)] ||
+                registry[capitalize(camelize(name))]));
+    }
+
+    /**
+     * #2437 In Vue 3, functional components do not have a public instance proxy but
+     * they exist in the internal parent chain. For code that relies on traversing
+     * public $parent chains, skip functional ones and go to the parent instead.
+     */
+    const getPublicInstance = (i) => {
+        if (!i)
+            return null;
+        if (isStatefulComponent(i))
+            return getExposeProxy(i) || i.proxy;
+        return getPublicInstance(i.parent);
+    };
+    const publicPropertiesMap = 
+    // Move PURE marker to new line to workaround compiler discarding it
+    // due to type annotation
+    /*#__PURE__*/ extend(Object.create(null), {
+        $: i => i,
+        $el: i => i.vnode.el,
+        $data: i => i.data,
+        $props: i => (i.props),
+        $attrs: i => (i.attrs),
+        $slots: i => (i.slots),
+        $refs: i => (i.refs),
+        $parent: i => getPublicInstance(i.parent),
+        $root: i => getPublicInstance(i.root),
+        $emit: i => i.emit,
+        $options: i => (__VUE_OPTIONS_API__ ? resolveMergedOptions(i) : i.type),
+        $forceUpdate: i => i.f || (i.f = () => queueJob(i.update)),
+        $nextTick: i => i.n || (i.n = nextTick.bind(i.proxy)),
+        $watch: i => (__VUE_OPTIONS_API__ ? instanceWatch.bind(i) : NOOP)
+    });
+    const PublicInstanceProxyHandlers = {
+        get({ _: instance }, key) {
+            const { ctx, setupState, data, props, accessCache, type, appContext } = instance;
+            // data / props / ctx
+            // This getter gets called for every property access on the render context
+            // during render and is a major hotspot. The most expensive part of this
+            // is the multiple hasOwn() calls. It's much faster to do a simple property
+            // access on a plain object, so we use an accessCache object (with null
+            // prototype) to memoize what access type a key corresponds to.
+            let normalizedProps;
+            if (key[0] !== '$') {
+                const n = accessCache[key];
+                if (n !== undefined) {
+                    switch (n) {
+                        case 1 /* SETUP */:
+                            return setupState[key];
+                        case 2 /* DATA */:
+                            return data[key];
+                        case 4 /* CONTEXT */:
+                            return ctx[key];
+                        case 3 /* PROPS */:
+                            return props[key];
+                        // default: just fallthrough
+                    }
+                }
+                else if (setupState !== EMPTY_OBJ && hasOwn(setupState, key)) {
+                    accessCache[key] = 1 /* SETUP */;
+                    return setupState[key];
+                }
+                else if (data !== EMPTY_OBJ && hasOwn(data, key)) {
+                    accessCache[key] = 2 /* DATA */;
+                    return data[key];
+                }
+                else if (
+                // only cache other properties when instance has declared (thus stable)
+                // props
+                (normalizedProps = instance.propsOptions[0]) &&
+                    hasOwn(normalizedProps, key)) {
+                    accessCache[key] = 3 /* PROPS */;
+                    return props[key];
+                }
+                else if (ctx !== EMPTY_OBJ && hasOwn(ctx, key)) {
+                    accessCache[key] = 4 /* CONTEXT */;
+                    return ctx[key];
+                }
+                else if (!__VUE_OPTIONS_API__ || shouldCacheAccess) {
+                    accessCache[key] = 0 /* OTHER */;
+                }
+            }
+            const publicGetter = publicPropertiesMap[key];
+            let cssModule, globalProperties;
+            // public $xxx properties
+            if (publicGetter) {
+                if (key === '$attrs') {
+                    track(instance, "get" /* GET */, key);
+                }
+                return publicGetter(instance);
+            }
+            else if (
+            // css module (injected by vue-loader)
+            (cssModule = type.__cssModules) &&
+                (cssModule = cssModule[key])) {
+                return cssModule;
+            }
+            else if (ctx !== EMPTY_OBJ && hasOwn(ctx, key)) {
+                // user may set custom properties to `this` that start with `$`
+                accessCache[key] = 4 /* CONTEXT */;
+                return ctx[key];
+            }
+            else if (
+            // global properties
+            ((globalProperties = appContext.config.globalProperties),
+                hasOwn(globalProperties, key))) {
+                {
+                    return globalProperties[key];
+                }
+            }
+            else ;
+        },
+        set({ _: instance }, key, value) {
+            const { data, setupState, ctx } = instance;
+            if (setupState !== EMPTY_OBJ && hasOwn(setupState, key)) {
+                setupState[key] = value;
+                return true;
+            }
+            else if (data !== EMPTY_OBJ && hasOwn(data, key)) {
+                data[key] = value;
+                return true;
+            }
+            else if (hasOwn(instance.props, key)) {
+                return false;
+            }
+            if (key[0] === '$' && key.slice(1) in instance) {
+                return false;
+            }
+            else {
+                {
+                    ctx[key] = value;
+                }
+            }
+            return true;
+        },
+        has({ _: { data, setupState, accessCache, ctx, appContext, propsOptions } }, key) {
+            let normalizedProps;
+            return (!!accessCache[key] ||
+                (data !== EMPTY_OBJ && hasOwn(data, key)) ||
+                (setupState !== EMPTY_OBJ && hasOwn(setupState, key)) ||
+                ((normalizedProps = propsOptions[0]) && hasOwn(normalizedProps, key)) ||
+                hasOwn(ctx, key) ||
+                hasOwn(publicPropertiesMap, key) ||
+                hasOwn(appContext.config.globalProperties, key));
+        },
+        defineProperty(target, key, descriptor) {
+            if (descriptor.get != null) {
+                // invalidate key cache of a getter based property #5417
+                target._.accessCache[key] = 0;
+            }
+            else if (hasOwn(descriptor, 'value')) {
+                this.set(target, key, descriptor.value, null);
+            }
+            return Reflect.defineProperty(target, key, descriptor);
+        }
+    };
     let shouldCacheAccess = true;
     function applyOptions(instance) {
         const options = resolveMergedOptions(instance);
@@ -2535,6 +2794,10 @@
                 const propsToUpdate = instance.vnode.dynamicProps;
                 for (let i = 0; i < propsToUpdate.length; i++) {
                     let key = propsToUpdate[i];
+                    // skip if the prop key is a declared emit event listener
+                    if (isEmitListener(instance.emitsOptions, key)) {
+                        continue;
+                    }
                     // PROPS flag guarantees rawProps to be non-null
                     const value = rawProps[key];
                     if (options) {
@@ -2778,6 +3041,10 @@
         ? value.map(normalizeVNode)
         : [normalizeVNode(value)];
     const normalizeSlot$1 = (key, rawSlot, ctx) => {
+        if (rawSlot._n) {
+            // already normalized - #5353
+            return rawSlot;
+        }
         const normalized = withCtx((...args) => {
             return normalizeSlotValue(rawSlot(...args));
         }, ctx);
@@ -2871,29 +3138,6 @@
             }
         }
     };
-    function invokeDirectiveHook(vnode, prevVNode, instance, name) {
-        const bindings = vnode.dirs;
-        const oldBindings = prevVNode && prevVNode.dirs;
-        for (let i = 0; i < bindings.length; i++) {
-            const binding = bindings[i];
-            if (oldBindings) {
-                binding.oldValue = oldBindings[i].value;
-            }
-            let hook = binding.dir[name];
-            if (hook) {
-                // disable tracking inside all lifecycle hooks
-                // since they can potentially be called inside effects.
-                pauseTracking();
-                callWithAsyncErrorHandling(hook, instance, 8 /* DIRECTIVE_HOOK */, [
-                    vnode.el,
-                    binding,
-                    vnode,
-                    prevVNode
-                ]);
-                resetTracking();
-            }
-        }
-    }
 
     function createAppContext() {
         return {
@@ -2919,6 +3163,9 @@
     let uid = 0;
     function createAppAPI(render, hydrate) {
         return function createApp(rootComponent, rootProps = null) {
+            if (!isFunction(rootComponent)) {
+                rootComponent = Object.assign({}, rootComponent);
+            }
             if (rootProps != null && !isObject(rootProps)) {
                 rootProps = null;
             }
@@ -3006,8 +3253,6 @@
                     }
                 },
                 provide(key, value) {
-                    // TypeScript doesn't allow symbols as index type
-                    // https://github.com/Microsoft/TypeScript/issues/24587
                     context.provides[key] = value;
                     return app;
                 }
@@ -3066,6 +3311,9 @@
                             if (!isArray(existing)) {
                                 if (_isString) {
                                     refs[ref] = [refValue];
+                                    if (hasOwn(setupState, ref)) {
+                                        setupState[ref] = refs[ref];
+                                    }
                                 }
                                 else {
                                     ref.value = [refValue];
@@ -3084,7 +3332,7 @@
                             setupState[ref] = value;
                         }
                     }
-                    else if (isRef(ref)) {
+                    else if (_isRef) {
                         ref.value = value;
                         if (rawRef.k)
                             refs[rawRef.k] = value;
@@ -3603,7 +3851,6 @@
             }
             else {
                 // no update needed. just copy over properties
-                n2.component = n1.component;
                 n2.el = n1.el;
                 instance.vnode = n2;
             }
@@ -3662,7 +3909,10 @@
                     // activated hook for keep-alive roots.
                     // #1742 activated hook must be accessed after first render
                     // since the hook may be injected by a child keep-alive
-                    if (initialVNode.shapeFlag & 256 /* COMPONENT_SHOULD_KEEP_ALIVE */) {
+                    if (initialVNode.shapeFlag & 256 /* COMPONENT_SHOULD_KEEP_ALIVE */ ||
+                        (parent &&
+                            isAsyncWrapper(parent.vnode) &&
+                            parent.vnode.shapeFlag & 256 /* COMPONENT_SHOULD_KEEP_ALIVE */)) {
                         instance.a && queuePostRenderEffect(instance.a, parentSuspense);
                     }
                     instance.isMounted = true;
@@ -3726,9 +3976,9 @@
                 }
             };
             // create reactive effect for rendering
-            const effect = (instance.effect = new ReactiveEffect(componentUpdateFn, () => queueJob(instance.update), instance.scope // track it in component's effect scope
+            const effect = (instance.effect = new ReactiveEffect(componentUpdateFn, () => queueJob(update), instance.scope // track it in component's effect scope
             ));
-            const update = (instance.update = effect.run.bind(effect));
+            const update = (instance.update = () => effect.run());
             update.id = instance.uid;
             // allowRecurse
             // #1801, #2043 component render effects should allow recursive updates
@@ -4111,7 +4361,9 @@
         const remove = vnode => {
             const { type, el, anchor, transition } = vnode;
             if (type === Fragment) {
-                removeFragment(el, anchor);
+                {
+                    removeFragment(el, anchor);
+                }
                 return;
             }
             if (type === Static) {
@@ -4319,49 +4571,6 @@
 
     const isTeleport = (type) => type.__isTeleport;
 
-    const COMPONENTS = 'components';
-    /**
-     * @private
-     */
-    function resolveComponent(name, maybeSelfReference) {
-        return resolveAsset(COMPONENTS, name, true, maybeSelfReference) || name;
-    }
-    const NULL_DYNAMIC_COMPONENT = Symbol();
-    // implementation
-    function resolveAsset(type, name, warnMissing = true, maybeSelfReference = false) {
-        const instance = currentRenderingInstance || currentInstance;
-        if (instance) {
-            const Component = instance.type;
-            // explicit self name has highest priority
-            if (type === COMPONENTS) {
-                const selfName = getComponentName(Component);
-                if (selfName &&
-                    (selfName === name ||
-                        selfName === camelize(name) ||
-                        selfName === capitalize(camelize(name)))) {
-                    return Component;
-                }
-            }
-            const res = 
-            // local registration
-            // check instance[type] first which is resolved for options API
-            resolve(instance[type] || Component[type], name) ||
-                // global registration
-                resolve(instance.appContext[type], name);
-            if (!res && maybeSelfReference) {
-                // fallback to implicit self-reference
-                return Component;
-            }
-            return res;
-        }
-    }
-    function resolve(registry, name) {
-        return (registry &&
-            (registry[name] ||
-                registry[camelize(name)] ||
-                registry[capitalize(camelize(name))]));
-    }
-
     const Fragment = Symbol(undefined);
     const Text = Symbol(undefined);
     const Comment = Symbol(undefined);
@@ -4537,6 +4746,15 @@
             if (children) {
                 normalizeChildren(cloned, children);
             }
+            if (isBlockTreeEnabled > 0 && !isBlockNode && currentBlock) {
+                if (cloned.shapeFlag & 6 /* COMPONENT */) {
+                    currentBlock[currentBlock.indexOf(type)] = cloned;
+                }
+                else {
+                    currentBlock.push(cloned);
+                }
+            }
+            cloned.patchFlag |= -2 /* BAIL */;
             return cloned;
         }
         // class component normalization.
@@ -4763,157 +4981,6 @@
         ]);
     }
 
-    /**
-     * #2437 In Vue 3, functional components do not have a public instance proxy but
-     * they exist in the internal parent chain. For code that relies on traversing
-     * public $parent chains, skip functional ones and go to the parent instead.
-     */
-    const getPublicInstance = (i) => {
-        if (!i)
-            return null;
-        if (isStatefulComponent(i))
-            return getExposeProxy(i) || i.proxy;
-        return getPublicInstance(i.parent);
-    };
-    const publicPropertiesMap = extend(Object.create(null), {
-        $: i => i,
-        $el: i => i.vnode.el,
-        $data: i => i.data,
-        $props: i => (i.props),
-        $attrs: i => (i.attrs),
-        $slots: i => (i.slots),
-        $refs: i => (i.refs),
-        $parent: i => getPublicInstance(i.parent),
-        $root: i => getPublicInstance(i.root),
-        $emit: i => i.emit,
-        $options: i => (__VUE_OPTIONS_API__ ? resolveMergedOptions(i) : i.type),
-        $forceUpdate: i => () => queueJob(i.update),
-        $nextTick: i => nextTick.bind(i.proxy),
-        $watch: i => (__VUE_OPTIONS_API__ ? instanceWatch.bind(i) : NOOP)
-    });
-    const PublicInstanceProxyHandlers = {
-        get({ _: instance }, key) {
-            const { ctx, setupState, data, props, accessCache, type, appContext } = instance;
-            // data / props / ctx
-            // This getter gets called for every property access on the render context
-            // during render and is a major hotspot. The most expensive part of this
-            // is the multiple hasOwn() calls. It's much faster to do a simple property
-            // access on a plain object, so we use an accessCache object (with null
-            // prototype) to memoize what access type a key corresponds to.
-            let normalizedProps;
-            if (key[0] !== '$') {
-                const n = accessCache[key];
-                if (n !== undefined) {
-                    switch (n) {
-                        case 1 /* SETUP */:
-                            return setupState[key];
-                        case 2 /* DATA */:
-                            return data[key];
-                        case 4 /* CONTEXT */:
-                            return ctx[key];
-                        case 3 /* PROPS */:
-                            return props[key];
-                        // default: just fallthrough
-                    }
-                }
-                else if (setupState !== EMPTY_OBJ && hasOwn(setupState, key)) {
-                    accessCache[key] = 1 /* SETUP */;
-                    return setupState[key];
-                }
-                else if (data !== EMPTY_OBJ && hasOwn(data, key)) {
-                    accessCache[key] = 2 /* DATA */;
-                    return data[key];
-                }
-                else if (
-                // only cache other properties when instance has declared (thus stable)
-                // props
-                (normalizedProps = instance.propsOptions[0]) &&
-                    hasOwn(normalizedProps, key)) {
-                    accessCache[key] = 3 /* PROPS */;
-                    return props[key];
-                }
-                else if (ctx !== EMPTY_OBJ && hasOwn(ctx, key)) {
-                    accessCache[key] = 4 /* CONTEXT */;
-                    return ctx[key];
-                }
-                else if (!__VUE_OPTIONS_API__ || shouldCacheAccess) {
-                    accessCache[key] = 0 /* OTHER */;
-                }
-            }
-            const publicGetter = publicPropertiesMap[key];
-            let cssModule, globalProperties;
-            // public $xxx properties
-            if (publicGetter) {
-                if (key === '$attrs') {
-                    track(instance, "get" /* GET */, key);
-                }
-                return publicGetter(instance);
-            }
-            else if (
-            // css module (injected by vue-loader)
-            (cssModule = type.__cssModules) &&
-                (cssModule = cssModule[key])) {
-                return cssModule;
-            }
-            else if (ctx !== EMPTY_OBJ && hasOwn(ctx, key)) {
-                // user may set custom properties to `this` that start with `$`
-                accessCache[key] = 4 /* CONTEXT */;
-                return ctx[key];
-            }
-            else if (
-            // global properties
-            ((globalProperties = appContext.config.globalProperties),
-                hasOwn(globalProperties, key))) {
-                {
-                    return globalProperties[key];
-                }
-            }
-            else ;
-        },
-        set({ _: instance }, key, value) {
-            const { data, setupState, ctx } = instance;
-            if (setupState !== EMPTY_OBJ && hasOwn(setupState, key)) {
-                setupState[key] = value;
-                return true;
-            }
-            else if (data !== EMPTY_OBJ && hasOwn(data, key)) {
-                data[key] = value;
-                return true;
-            }
-            else if (hasOwn(instance.props, key)) {
-                return false;
-            }
-            if (key[0] === '$' && key.slice(1) in instance) {
-                return false;
-            }
-            else {
-                {
-                    ctx[key] = value;
-                }
-            }
-            return true;
-        },
-        has({ _: { data, setupState, accessCache, ctx, appContext, propsOptions } }, key) {
-            let normalizedProps;
-            return (!!accessCache[key] ||
-                (data !== EMPTY_OBJ && hasOwn(data, key)) ||
-                (setupState !== EMPTY_OBJ && hasOwn(setupState, key)) ||
-                ((normalizedProps = propsOptions[0]) && hasOwn(normalizedProps, key)) ||
-                hasOwn(ctx, key) ||
-                hasOwn(publicPropertiesMap, key) ||
-                hasOwn(appContext.config.globalProperties, key));
-        },
-        defineProperty(target, key, descriptor) {
-            if (descriptor.get != null) {
-                this.set(target, key, descriptor.get(), null);
-            }
-            else if (descriptor.value != null) {
-                this.set(target, key, descriptor.value, null);
-            }
-            return Reflect.defineProperty(target, key, descriptor);
-        }
-    };
-
     const emptyAppContext = createAppContext();
     let uid$1 = 0;
     function createComponentInstance(vnode, parent, suspense) {
@@ -4940,7 +5007,7 @@
             provides: parent ? parent.provides : Object.create(appContext.provides),
             accessCache: null,
             renderCache: [],
-            // local resovled assets
+            // local resolved assets
             components: null,
             directives: null,
             // resolved props and emits options
@@ -5160,10 +5227,10 @@
                 })));
         }
     }
-    function getComponentName(Component) {
+    function getComponentName(Component, includeInferred = true) {
         return isFunction(Component)
             ? Component.displayName || Component.name
-            : Component.name;
+            : Component.name || (includeInferred && Component.__name);
     }
     function isClassComponent(value) {
         return isFunction(value) && '__vccOpts' in value;
@@ -5203,11 +5270,11 @@
     }
 
     // Core API ------------------------------------------------------------------
-    const version = "3.2.31";
+    const version = "3.2.37";
 
     const svgNS = 'http://www.w3.org/2000/svg';
     const doc = (typeof document !== 'undefined' ? document : null);
-    const templateContainer = doc && doc.createElement('template');
+    const templateContainer = doc && /*#__PURE__*/ doc.createElement('template');
     const nodeOps = {
         insert: (child, parent, anchor) => {
             parent.insertBefore(child, anchor || null);
@@ -5358,6 +5425,8 @@
             val.forEach(v => setStyle(style, name, v));
         }
         else {
+            if (val == null)
+                val = '';
             if (name.startsWith('--')) {
                 // custom property definition
                 style.setProperty(name, val);
@@ -5452,61 +5521,62 @@
             }
             return;
         }
+        let needRemove = false;
         if (value === '' || value == null) {
             const type = typeof el[key];
             if (type === 'boolean') {
                 // e.g. <select multiple> compiles to { multiple: '' }
-                el[key] = includeBooleanAttr(value);
-                return;
+                value = includeBooleanAttr(value);
             }
             else if (value == null && type === 'string') {
                 // e.g. <div :id="null">
-                el[key] = '';
-                el.removeAttribute(key);
-                return;
+                value = '';
+                needRemove = true;
             }
             else if (type === 'number') {
                 // e.g. <img :width="null">
                 // the value of some IDL attr must be greater than 0, e.g. input.size = 0 -> error
-                try {
-                    el[key] = 0;
-                }
-                catch (_a) { }
-                el.removeAttribute(key);
-                return;
+                value = 0;
+                needRemove = true;
             }
         }
-        // some properties perform value validation and throw
+        // some properties perform value validation and throw,
+        // some properties has getter, no setter, will error in 'use strict'
+        // eg. <select :type="null"></select> <select :willValidate="null"></select>
         try {
             el[key] = value;
         }
         catch (e) {
         }
+        needRemove && el.removeAttribute(key);
     }
 
     // Async edge case fix requires storing an event listener's attach timestamp.
-    let _getNow = Date.now;
-    let skipTimestampCheck = false;
-    if (typeof window !== 'undefined') {
-        // Determine what event timestamp the browser is using. Annoyingly, the
-        // timestamp can either be hi-res (relative to page load) or low-res
-        // (relative to UNIX epoch), so in order to compare time we have to use the
-        // same timestamp type when saving the flush timestamp.
-        if (_getNow() > document.createEvent('Event').timeStamp) {
-            // if the low-res timestamp which is bigger than the event timestamp
-            // (which is evaluated AFTER) it means the event is using a hi-res timestamp,
-            // and we need to use the hi-res version for event listeners as well.
-            _getNow = () => performance.now();
+    const [_getNow, skipTimestampCheck] = /*#__PURE__*/ (() => {
+        let _getNow = Date.now;
+        let skipTimestampCheck = false;
+        if (typeof window !== 'undefined') {
+            // Determine what event timestamp the browser is using. Annoyingly, the
+            // timestamp can either be hi-res (relative to page load) or low-res
+            // (relative to UNIX epoch), so in order to compare time we have to use the
+            // same timestamp type when saving the flush timestamp.
+            if (Date.now() > document.createEvent('Event').timeStamp) {
+                // if the low-res timestamp which is bigger than the event timestamp
+                // (which is evaluated AFTER) it means the event is using a hi-res timestamp,
+                // and we need to use the hi-res version for event listeners as well.
+                _getNow = performance.now.bind(performance);
+            }
+            // #3485: Firefox <= 53 has incorrect Event.timeStamp implementation
+            // and does not fire microtasks in between event propagation, so safe to exclude.
+            const ffMatch = navigator.userAgent.match(/firefox\/(\d+)/i);
+            skipTimestampCheck = !!(ffMatch && Number(ffMatch[1]) <= 53);
         }
-        // #3485: Firefox <= 53 has incorrect Event.timeStamp implementation
-        // and does not fire microtasks in between event propagation, so safe to exclude.
-        const ffMatch = navigator.userAgent.match(/firefox\/(\d+)/i);
-        skipTimestampCheck = !!(ffMatch && Number(ffMatch[1]) <= 53);
-    }
+        return [_getNow, skipTimestampCheck];
+    })();
     // To avoid the overhead of repeatedly calling performance.now(), we cache
     // and use the same timestamp for all event listeners attached in the same tick.
     let cachedNow = 0;
-    const p = Promise.resolve();
+    const p = /*#__PURE__*/ Promise.resolve();
     const reset = () => {
         cachedNow = 0;
     };
@@ -5631,13 +5701,13 @@
             }
             return false;
         }
-        // spellcheck and draggable are numerated attrs, however their
-        // corresponding DOM properties are actually booleans - this leads to
-        // setting it with a string "false" value leading it to be coerced to
-        // `true`, so we need to always treat them as attributes.
+        // these are enumerated attrs, however their corresponding DOM properties
+        // are actually booleans - this leads to setting it with a string "false"
+        // value leading it to be coerced to `true`, so we need to always treat
+        // them as attributes.
         // Note that `contentEditable` doesn't have this problem: its DOM
         // property is also enumerated string values.
-        if (key === 'spellcheck' || key === 'draggable') {
+        if (key === 'spellcheck' || key === 'draggable' || key === 'translate') {
             return false;
         }
         // #1787, #2840 form property on form elements is readonly and must be set as
@@ -5660,7 +5730,7 @@
         return key in el;
     }
 
-    const rendererOptions = extend({ patchProp }, nodeOps);
+    const rendererOptions = /*#__PURE__*/ extend({ patchProp }, nodeOps);
     // lazy create the renderer - this makes core renderer logic tree-shakable
     // in case the user only imports reactivity utilities from Vue.
     let renderer;
@@ -5715,7 +5785,7 @@
       const _component_router_view = resolveComponent("router-view");
       return openBlock(), createBlock(_component_router_view);
     }
-    var App = /* @__PURE__ */ _export_sfc(_sfc_main$1, [["render", _sfc_render$1], ["__file", "App.vue"]]);
+    var App = /* @__PURE__ */ _export_sfc(_sfc_main$1, [["render", _sfc_render$1], ["__file", "D:\\project\\\u4E2A\u4EBA\\template\\template-chrome-extension\\package\\views\\App.vue"]]);
 
     function getDevtoolsGlobalHook() {
         return getTarget().__VUE_DEVTOOLS_GLOBAL_HOOK__;
@@ -5885,7 +5955,7 @@
     }
 
     /*!
-      * vue-router v4.0.14
+      * vue-router v4.0.16
       * (c) 2022 Eduardo San Martin Morote
       * @license MIT
       */
@@ -6686,9 +6756,9 @@
                         const text = Array.isArray(param) ? param.join('/') : param;
                         if (!text) {
                             if (optional) {
-                                // if we have more than one optional param like /:a?-static we
-                                // don't need to care about the optional param
-                                if (segment.length < 2) {
+                                // if we have more than one optional param like /:a?-static and there are more segments, we don't need to
+                                // care about the optional param
+                                if (segment.length < 2 && segments.length > 1) {
                                     // remove the last slash as we could be at the end
                                     if (path.endsWith('/'))
                                         path = path.slice(0, -1);
@@ -6764,6 +6834,12 @@
                 return comp;
             i++;
         }
+        if (Math.abs(bScore.length - aScore.length) === 1) {
+            if (isLastScoreNegative(aScore))
+                return 1;
+            if (isLastScoreNegative(bScore))
+                return -1;
+        }
         // if a and b share the same score entries but b has more, sort b first
         return bScore.length - aScore.length;
         // this is the ternary version
@@ -6772,6 +6848,16 @@
         //   : aScore.length > bScore.length
         //   ? -1
         //   : 0
+    }
+    /**
+     * This allows detecting splats at the end of a path: /home/:id(.*)*
+     *
+     * @param score - score to check
+     * @returns true if the last entry is negative
+     */
+    function isLastScoreNegative(score) {
+        const last = score[score.length - 1];
+        return score.length > 0 && last[last.length - 1] < 0;
     }
 
     const ROOT_TOKEN = {
@@ -7646,6 +7732,7 @@
     }
     const RouterLinkImpl = /*#__PURE__*/ defineComponent({
         name: 'RouterLink',
+        compatConfig: { MODE: 3 },
         props: {
             to: {
                 type: [String, Object],
@@ -7767,6 +7854,9 @@
             },
             route: Object,
         },
+        // Better compat for @vue/compat users
+        // https://github.com/vuejs/router/issues/1315
+        compatConfig: { MODE: 3 },
         setup(props, { attrs, slots }) {
             const injectedRoute = inject(routerViewLocationKey);
             const routeToDisplay = computed(() => props.route || injectedRoute.value);
@@ -8648,6 +8738,9 @@
         let removeHistoryListener;
         // attach listener to history to trigger navigations
         function setupListeners() {
+            // avoid setting up listeners twice due to an invalid first navigation
+            if (removeHistoryListener)
+                return;
             removeHistoryListener = routerHistory.listen((to, _from, info) => {
                 // cannot be a redirect route because it was in history
                 const toLocation = resolve(to);
@@ -8844,6 +8937,7 @@
                         // invalidate the current navigation
                         pendingLocation = START_LOCATION_NORMALIZED;
                         removeHistoryListener && removeHistoryListener();
+                        removeHistoryListener = null;
                         currentRoute.value = START_LOCATION_NORMALIZED;
                         started = false;
                         ready = false;
@@ -8891,7 +8985,7 @@
     function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {
       return openBlock(), createElementBlock("div", _hoisted_1, "Hi, template-chrome-extension");
     }
-    var Popup = /* @__PURE__ */ _export_sfc(_sfc_main, [["render", _sfc_render], ["__file", "popup.vue"]]);
+    var Popup = /* @__PURE__ */ _export_sfc(_sfc_main, [["render", _sfc_render], ["__file", "D:\\project\\\u4E2A\u4EBA\\template\\template-chrome-extension\\package\\views\\popup\\view\\popup.vue"]]);
 
     const routes = [
       {
@@ -8914,4 +9008,4 @@
     app.use(router);
     app.mount("#popup-app");
 
-}));
+})();

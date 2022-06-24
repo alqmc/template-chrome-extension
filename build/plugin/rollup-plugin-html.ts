@@ -1,8 +1,8 @@
-import type { NormalizedOutputOptions, Plugin, PluginContext } from 'rollup';
-import { parse } from 'node-html-parser';
 import { basename } from 'path';
 import { readFile } from 'fs/promises';
+import { parse } from 'node-html-parser';
 import { formatCode } from '../utils/bufity';
+import type { NormalizedOutputOptions, Plugin, PluginContext } from 'rollup';
 interface htmlOptions {
   template: string;
   style?: string[];
@@ -20,10 +20,13 @@ export const html = (htmlOptions: htmlOptions): Plugin => {
   ) {
     const template = this.cache.get('templateIsFile');
     const doc = parse(template, {
-      comment: true
+      comment: true,
     });
     const html = doc.querySelector('html');
+    if (!html) return;
     const head = html.querySelector('head');
+    if (!head) return;
+    if (!options.file) return;
     const script = `<script defer src="./${basename(options.file)}"></script>`;
     htmlOptions.style?.forEach((style) => {
       const str = `<link rel="stylesheet" href="${style}">`;
@@ -34,12 +37,12 @@ export const html = (htmlOptions: htmlOptions): Plugin => {
       type: 'asset',
       fileName: basename(options.file).replace('.js', '.html'),
       name: basename(options.file).replace('.js', ''),
-      source: formatCode(doc.toString(), 'html')
+      source: formatCode(doc.toString(), 'html'),
     });
   }
   return {
     name: pluginName,
     buildStart,
-    generateBundle
-  };
+    generateBundle,
+  } as Plugin;
 };

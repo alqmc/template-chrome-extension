@@ -1,9 +1,9 @@
-import { src, dest } from 'gulp';
+import path from 'path';
+import { dest, src } from 'gulp';
 import cleanCss from 'gulp-clean-css';
 import chalk from 'chalk';
 import gulpLess from 'gulp-less';
 import autoprefixer from 'gulp-autoprefixer';
-import path from 'path';
 import { buildOutpath, enterPath } from './utils/path';
 export const buildStyles = () => {
   return src([path.resolve(enterPath, 'source/style/*.less')])
