@@ -8,16 +8,15 @@ specifiers:
   '@commitlint/cli': ^8.3.5
   '@commitlint/config-angular': ^8.3.4
   '@rollup/plugin-replace': ^4.0.0
-  '@types/archiver': ^5.3.1
   '@types/gulp': ^4.0.9
   '@types/gulp-autoprefixer': ^0.0.33
+  '@types/gulp-clean-css': ^4.3.0
+  '@types/gulp-less': ^0.0.32
   '@types/node': ^17.0.25
   '@types/rollup-plugin-css-only': ^3.1.0
   '@vitejs/plugin-vue': ^2.2.2
   '@vue/compiler-sfc': ^3.0.7
   '@vue/tsconfig': ^0.1.3
-  archiver: ^5.3.0
-  chalk: 4.1.2
   chrome-types: ^0.1.96
   commitizen: ^4.1.2
   compare-func: ^2.0.0
@@ -30,6 +29,7 @@ specifiers:
   gulp-clean-css: ^4.3.0
   gulp-less: ^5.0.0
   husky: ^8.0.1
+  kolorist: ^1.5.1
   less: ^4.1.2
   lint-staged: ^10.5.4
   node-html-parser: ^5.3.3
@@ -56,16 +56,15 @@ devDependencies:
   '@commitlint/cli': 8.3.6
   '@commitlint/config-angular': 8.3.6
   '@rollup/plugin-replace': 4.0.0_rollup@2.70.1
-  '@types/archiver': 5.3.1
   '@types/gulp': 4.0.9
   '@types/gulp-autoprefixer': 0.0.33
+  '@types/gulp-clean-css': 4.3.0
+  '@types/gulp-less': 0.0.32
   '@types/node': 17.0.45
   '@types/rollup-plugin-css-only': 3.1.0
   '@vitejs/plugin-vue': 2.3.1_vite@2.9.1+vue@3.2.37
   '@vue/compiler-sfc': 3.2.31
   '@vue/tsconfig': 0.1.3_@types+node@17.0.45
-  archiver: 5.3.0
-  chalk: 4.1.2
   chrome-types: 0.1.96
   commitizen: 4.2.4
   compare-func: 2.0.0
@@ -78,6 +77,7 @@ devDependencies:
   gulp-clean-css: 4.3.0
   gulp-less: 5.0.0
   husky: 8.0.1
+  kolorist: 1.5.1
   less: 4.1.2
   lint-staged: 10.5.4
   node-html-parser: 5.3.3
@@ -900,10 +900,11 @@ packages:
     dev: true
     optional: true
 
-  /@types/archiver/5.3.1:
-    resolution: {integrity: sha512-wKYZaSXaDvTZuInAWjCeGG7BEAgTWG2zZW0/f7IYFcoHB2X2d9lkVFnrOlXl3W6NrvO6Ml3FLLu8Uksyymcpnw==}
+  /@types/clean-css/4.2.5:
+    resolution: {integrity: sha512-NEzjkGGpbs9S9fgC4abuBvTpVwE3i+Acu9BBod3PUyjDVZcNsGx61b8r2PphR61QGPnn0JHVs5ey6/I4eTrkxw==}
     dependencies:
-      '@types/glob': 7.2.0
+      '@types/node': 17.0.45
+      source-map: 0.6.1
     dev: true
 
   /@types/estree/0.0.39:
@@ -930,6 +931,19 @@ packages:
 
   /@types/gulp-autoprefixer/0.0.33:
     resolution: {integrity: sha512-FgunPm1uMroC/w9FCxtQhPPskR/WvnT+sNPxnyldwNXjq8K5ktzZAOqATyrYk0jTgae793uc+k5vsGV6Q+G7xA==}
+    dependencies:
+      '@types/node': 17.0.45
+    dev: true
+
+  /@types/gulp-clean-css/4.3.0:
+    resolution: {integrity: sha512-aRV2BvZA+X/SdgONQW4OkIzInYhvSqeUCiLfwc3VCD0/pxQT9xAadwHmtYGF2kc66cD4uSPmE+s4JYFvhHLaUA==}
+    dependencies:
+      '@types/clean-css': 4.2.5
+      '@types/node': 17.0.45
+    dev: true
+
+  /@types/gulp-less/0.0.32:
+    resolution: {integrity: sha512-MPOpL7nL383jCkScWbShSUSTWA9r6lnBEc0VCClcaTPmE7vNn8BxgoEFPHB8Uv5hhoP69M1keB/Pv/jbD34XSg==}
     dependencies:
       '@types/node': 17.0.45
     dev: true
@@ -1507,19 +1521,6 @@ packages:
       lodash.union: 4.6.0
       normalize-path: 3.0.0
       readable-stream: 2.3.7
-    dev: true
-
-  /archiver/5.3.0:
-    resolution: {integrity: sha512-iUw+oDwK0fgNpvveEsdQ0Ase6IIKztBJU2U0E9MzszMfmVVUyv1QJhS2ITW9ZCqx8dktAxVAjWWkKehuZE8OPg==}
-    engines: {node: '>= 10'}
-    dependencies:
-      archiver-utils: 2.1.0
-      async: 3.2.3
-      buffer-crc32: 0.2.13
-      readable-stream: 3.6.0
-      readdir-glob: 1.1.1
-      tar-stream: 2.2.0
-      zip-stream: 4.1.0
     dev: true
 
   /archiver/5.3.1:
